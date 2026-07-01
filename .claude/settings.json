@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(Move-Item -Destination . -Force)",
+      "PowerShell(npx tsc --noEmit)",
+      "PowerShell(npm run lint)"
+    ]
+  }
+}
