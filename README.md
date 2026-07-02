@@ -10,7 +10,7 @@
 ### 技術棧（已定案並實作）
 - **前端＋後端**：Next.js 16（App Router）+ TypeScript + Tailwind CSS，前後端同一個專案。
 - **部署**：已部署至 Vercel（[restaurent-decision.vercel.app](https://restaurent-decision.vercel.app)）。
-- **生成回覆的 LLM**：目前使用 **OpenAI API（`gpt-4o-mini`）**，程式碼在 `src/lib/openai.ts`。中間繞了幾圈：一開始因為 Anthropic 申請需先綁信用卡改用 Gemini 免費方案測試 → Gemini 免費額度每日僅 20 次很快用完 → 嘗試用 Google Cloud 試用額度（$9,422）解決，才發現 **Gemini API 走獨立的「Cloud Prepay」計費系統，不會用到 GCP 一般試用額度**，需要另外用信用卡最低儲值 NT$1,000 且不可退款 → 改申請 Anthropic 帳號、改用 Claude Haiku 4.5 → 拿到 `ANTHROPIC_API_KEY` 後實測，發現金鑰本身有效（認證通過），但帳戶**信用額度為 0**（Anthropic Console 的儲值付款卡關問題還沒解決）→ 不再等待，改用 **OpenAI `gpt-4o-mini`**（`OPENAI_API_KEY` 已儲值成功），已實測 `/api/recommend` 端對端成功。若之後 Anthropic 儲值問題解決，因介面設計沒變（`refineSearchQuery`／`generateReply` 兩個函式），只需把 `src/lib/openai.ts` 換回 `src/lib/claude.ts`（程式碼還在 git 歷史紀錄裡）即可切回。若之後想換其他 LLM，也只需改這一個檔案，其他程式不受影響。
+- **生成回覆的 LLM**：目前使用 **OpenAI API（`gpt-4o-mini`）**，程式碼在 `src/lib/openai.ts`。 **OpenAI `gpt-4o-mini`**（`OPENAI_API_KEY` 已儲值成功），已實測 `/api/recommend` 端對端成功。
 - **餐廳資料**：Google Places API (New)，`places:searchText` 端點。
 - **金鑰安全**：Google Places、OpenAI 金鑰都只存在後端 `.env.local`（已加入 `.gitignore`），前端從未直接呼叫這兩個外部 API，一律透過自家後端路由轉呼叫。
 - **會員機制**：測試版不做登入帳密，個人化設定與歷史紀錄存在瀏覽器 `localStorage`。
