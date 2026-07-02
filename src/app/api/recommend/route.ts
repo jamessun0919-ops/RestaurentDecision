@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { MOOD_LABELS, MOTIVATION_LABELS } from "@/lib/dictionary";
-import { generateReply } from "@/lib/claude";
+import { generateReply } from "@/lib/openai";
 import { getRecommendations } from "@/lib/recommend";
 import { RecommendRequestBody, RecommendResponse } from "@/lib/types";
 

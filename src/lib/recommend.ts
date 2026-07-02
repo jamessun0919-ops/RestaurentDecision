@@ -1,5 +1,5 @@
 import { DIETARY_RESTRICTION_INFO, MOOD_LABELS, MOOD_TIERS, MOTIVATION_KEYWORDS, MOTIVATION_LABELS } from "./dictionary";
-import { refineSearchQuery } from "./claude";
+import { refineSearchQuery } from "./openai";
 import { buildNavigationUrl, haversineDistanceKm, PlaceCandidate, searchPlacesText } from "./places";
 import { Mood, Motivation, PriceLevel, Profile, RestaurantCard } from "./types";
 
@@ -84,13 +84,16 @@ async function runTieredSearch(
   lng: number,
   distanceKm: number,
   priceLevel: PriceLevel,
-  excludeIds: Set<string>
+  excludeIds: Set<string>,
+  maxDistanceKm: number
 ): Promise<RestaurantCard[]> {
   const merged = new Map<string, PlaceCandidate>();
 
   for (const query of queries) {
     const results = await searchPlacesText(query, lat, lng, distanceKm * 1000);
-    const filtered = applyHardFilters(results, profile).filter((r) => !excludeIds.has(r.placeId));
+    const filtered = applyHardFilters(results, profile)
+      .filter((r) => !excludeIds.has(r.placeId))
+      .filter((r) => haversineDistanceKm(lat, lng, r.lat, r.lng) <= maxDistanceKm);
 
     for (const r of filtered) {
       if (!merged.has(r.placeId)) merged.set(r.placeId, r);
@@ -120,6 +123,7 @@ export async function getRecommendations(params: {
 }): Promise<RecommendResult> {
   const excludeIds = new Set([...params.excludePlaceIds, ...params.profile.excludedPlaceIds]);
   const queries = await buildTierQueries(params.mood, params.motivation, params.profile);
+  const maxDistanceKm = params.distanceKm * 2;
 
   let ranked = await runTieredSearch(
     queries,
@@ -128,7 +132,8 @@ export async function getRecommendations(params: {
     params.lng,
     params.distanceKm,
     params.priceLevel,
-    excludeIds
+    excludeIds,
+    maxDistanceKm
   );
 
   let relaxed = false;
@@ -144,7 +149,8 @@ export async function getRecommendations(params: {
       params.lng,
       relaxedDistanceKm,
       relaxedPriceLevel,
-      excludeIds
+      excludeIds,
+      maxDistanceKm
     );
     const merged = new Map<string, RestaurantCard>();
     for (const r of [...ranked, ...relaxedRanked]) {

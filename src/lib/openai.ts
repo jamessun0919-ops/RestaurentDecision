@@ -1,17 +1,17 @@
-import Anthropic from "@anthropic-ai/sdk";
-import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
+import OpenAI from "openai";
+import { zodResponseFormat } from "openai/helpers/zod";
 import { z } from "zod";
 import { DIETARY_RESTRICTION_INFO, HEALTH_GOAL_HINT } from "./dictionary";
 import { Profile, RestaurantCard } from "./types";
 
-const MODEL = "claude-haiku-4-5";
+const MODEL = "gpt-4o-mini";
 
-function getClient(): Anthropic {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+function getClient(): OpenAI {
+  const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
-    throw new Error("ANTHROPIC_API_KEY 未設定");
+    throw new Error("OPENAI_API_KEY 未設定");
   }
-  return new Anthropic({ apiKey });
+  return new OpenAI({ apiKey });
 }
 
 const SPICY_LABELS = ["不辣", "小辣", "中辣", "大辣"];
@@ -42,17 +42,17 @@ export async function refineSearchQuery(
 - 若辣度接受度是不辣，避免辣味類詞彙。
 - 只輸出查詢字串本身。`;
 
-  const response = await getClient().messages.create({
+  const response = await getClient().chat.completions.create({
     model: MODEL,
-    max_tokens: 60,
+    max_completion_tokens: 60,
     messages: [{ role: "user", content: prompt }],
   });
 
-  const textBlock = response.content.find((b) => b.type === "text");
-  if (!textBlock || textBlock.type !== "text") {
-    throw new Error("Claude API 沒有回傳文字內容");
+  const text = response.choices[0]?.message?.content;
+  if (!text) {
+    throw new Error("OpenAI API 沒有回傳文字內容");
   }
-  return textBlock.text.trim();
+  return text.trim();
 }
 
 export interface GeneratedReply {
@@ -102,21 +102,20 @@ ${restaurantList}
 1. opening：一句充滿同理心與溫度的話語，承接使用者的心情（不要提到任何餐廳名稱）。
 2. reasons：針對上面每一間餐廳各一筆，placeId 必須完全複製候選清單中的 placeId，reason 用 2-3 句話說明該餐廳為何能滿足使用者當下的心情與動機。`;
 
-  const response = await getClient().messages.parse({
+  const response = await getClient().chat.completions.parse({
     model: MODEL,
-    max_tokens: 1024,
+    max_completion_tokens: 1024,
     messages: [{ role: "user", content: prompt }],
-    output_config: {
-      format: zodOutputFormat(ReplySchema),
-    },
+    response_format: zodResponseFormat(ReplySchema, "reply"),
   });
 
-  if (!response.parsed_output) {
-    throw new Error("Claude API 回傳的推薦內容格式錯誤");
+  const parsed = response.choices[0]?.message?.parsed;
+  if (!parsed) {
+    throw new Error("OpenAI API 回傳的推薦內容格式錯誤");
   }
 
   return {
-    opening: response.parsed_output.opening,
-    reasons: new Map(response.parsed_output.reasons.map((r) => [r.placeId, r.reason])),
+    opening: parsed.opening,
+    reasons: new Map(parsed.reasons.map((r) => [r.placeId, r.reason])),
   };
 }
