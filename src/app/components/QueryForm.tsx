@@ -96,7 +96,7 @@ export default function QueryForm({
         <span className="text-sm text-gray-600">距離：{distanceKm} 公里</span>
         <input
           type="range"
-          min={0.5}
+          min={1}
           max={10}
           step={0.5}
           value={distanceKm}

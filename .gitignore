@@ -40,6 +40,9 @@ yarn-error.log*
 # vercel
 .vercel
 
+# local-only test notes (not for git)
+本機測試記錄.md
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

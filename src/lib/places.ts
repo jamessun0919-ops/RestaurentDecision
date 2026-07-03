@@ -73,6 +73,7 @@ export async function searchPlacesText(
           radius: Math.min(radiusMeters, 50000),
         },
       },
+      rankPreference: "DISTANCE",
       maxResultCount: 20,
       languageCode: "zh-TW",
     }),
