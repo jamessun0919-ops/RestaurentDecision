@@ -20,36 +20,19 @@ const PRICE_OPTIONS: { value: PriceLevel; label: string }[] = [
   { value: 4, label: "$$$$" },
 ];
 
-export default function QueryForm({ onSubmit }: { onSubmit: (input: QueryInput) => void }) {
+export default function QueryForm({
+  onSubmit,
+  location,
+}: {
+  onSubmit: (input: QueryInput) => void;
+  location: { lat: number; lng: number };
+}) {
   const [mood, setMood] = useState<Mood | null>(null);
   const [motivation, setMotivation] = useState<Motivation | null>(null);
   const [priceLevel, setPriceLevel] = useState<PriceLevel>(2);
   const [distanceKm, setDistanceKm] = useState(2);
-  const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
-  const [locationError, setLocationError] = useState<string | null>(null);
-  const [locating, setLocating] = useState(false);
 
-  function requestLocation() {
-    setLocating(true);
-    setLocationError(null);
-    if (!navigator.geolocation) {
-      setLocationError("這個瀏覽器不支援定位功能，無法使用本服務。");
-      setLocating(false);
-      return;
-    }
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-        setLocating(false);
-      },
-      () => {
-        setLocationError("無法取得你的位置授權，這個功能需要定位權限才能使用。");
-        setLocating(false);
-      }
-    );
-  }
-
-  const canSubmit = mood && motivation && location;
+  const canSubmit = mood && motivation;
 
   return (
     <div className="flex flex-col gap-6 w-full max-w-md mx-auto p-4">
@@ -119,22 +102,6 @@ export default function QueryForm({ onSubmit }: { onSubmit: (input: QueryInput) 
           value={distanceKm}
           onChange={(e) => setDistanceKm(Number(e.target.value))}
         />
-      </div>
-
-      <div className="flex flex-col gap-2">
-        {location ? (
-          <p className="text-sm text-green-700">已取得目前位置</p>
-        ) : (
-          <button
-            type="button"
-            onClick={requestLocation}
-            disabled={locating}
-            className="border rounded-lg py-2 text-sm"
-          >
-            {locating ? "定位中..." : "取得目前位置"}
-          </button>
-        )}
-        {locationError && <p className="text-sm text-red-600">{locationError}</p>}
       </div>
 
       <button

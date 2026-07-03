@@ -13,10 +13,18 @@ const HEALTH_GOAL_OPTIONS: { value: HealthGoal; label: string }[] = [
 
 const SPICY_OPTIONS = ["不辣", "小辣", "中辣", "大辣"];
 
+const ALLERGY_DISCLAIMER =
+  "本功能依您提供的設定，提供非醫療的餐廳選擇建議，點餐及享用美食請遵守專業醫療建議。";
+
 export default function ProfileForm({ onSubmit }: { onSubmit: (profile: Profile) => void }) {
   const [profile, setProfile] = useState<Profile>(DEFAULT_PROFILE);
+  const [showAllergyDisclaimer, setShowAllergyDisclaimer] = useState(false);
 
   function toggleRestriction(r: DietaryRestriction) {
+    const adding = !profile.dietaryRestrictions.includes(r);
+    if (adding && (r === "seafood_allergy" || r === "nut_allergy")) {
+      setShowAllergyDisclaimer(true);
+    }
     setProfile((p) => ({
       ...p,
       dietaryRestrictions: p.dietaryRestrictions.includes(r)
@@ -132,6 +140,21 @@ export default function ProfileForm({ onSubmit }: { onSubmit: (profile: Profile)
       <button type="submit" className="bg-black text-white rounded-lg py-3 font-semibold">
         儲存並開始使用
       </button>
+
+      {showAllergyDisclaimer && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-6 max-w-sm w-full flex flex-col gap-4">
+            <p className="text-sm text-gray-800">{ALLERGY_DISCLAIMER}</p>
+            <button
+              type="button"
+              onClick={() => setShowAllergyDisclaimer(false)}
+              className="bg-black text-white rounded-lg py-2 font-semibold"
+            >
+              我已了解
+            </button>
+          </div>
+        </div>
+      )}
     </form>
   );
 }

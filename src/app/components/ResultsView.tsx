@@ -18,7 +18,13 @@ function RestaurantList({
   onSelect: (r: RestaurantCard) => void;
 }) {
   if (restaurants.length === 0) {
-    return <p className="text-sm text-gray-500">這一輪沒有找到符合條件的餐廳。</p>;
+    return (
+      <div className="flex flex-col items-center gap-3 text-center">
+        {/* eslint-disable-next-line @next/next/no-img-element -- static public asset, next/image adds no benefit here */}
+        <img src="/sorry.jpg" alt="" className="w-40 h-40 object-cover rounded-full" />
+        <p className="text-sm text-gray-500">這一輪沒有找到符合條件的餐廳。</p>
+      </div>
+    );
   }
 
   return (
@@ -126,16 +132,22 @@ export default function ResultsView({
   round1,
   round2,
   loadingRound2,
+  loadingWiden,
   selectedPlaceId,
   onSelect,
   onRequestRound2,
+  onWiden,
+  onStartOver,
 }: {
   round1: RecommendResponse;
   round2: RecommendResponse | null;
   loadingRound2: boolean;
+  loadingWiden: boolean;
   selectedPlaceId: string | null;
   onSelect: (r: RestaurantCard, round: 1 | 2) => void;
   onRequestRound2: () => void;
+  onWiden: () => void;
+  onStartOver: () => void;
 }) {
   const round2Ref = useRef<HTMLDivElement>(null);
 
@@ -145,6 +157,9 @@ export default function ResultsView({
     }
   }, [round2]);
 
+  const showRescuePrompt = round1.rescued && !selectedPlaceId;
+  const foundNothing = round1.restaurants.length === 0;
+
   return (
     <div className="flex flex-col gap-6 w-full max-w-md mx-auto p-4">
       <ResultSection
@@ -153,7 +168,34 @@ export default function ResultsView({
         onSelect={(r) => onSelect(r, 1)}
       />
 
-      {!round2 && !selectedPlaceId && (
+      {showRescuePrompt && (
+        <div className="flex flex-col gap-2 border border-amber-200 bg-amber-50 rounded-lg p-4">
+          <p className="text-sm text-amber-800">
+            {foundNothing
+              ? "這附近目前找不到符合設定條件的餐廳，您可以放寬搜尋距離，或修改心情／動機重新試試。"
+              : "符合您設定條件的選擇不多，是否為您放寬搜尋距離？"}
+          </p>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={onWiden}
+              disabled={loadingWiden}
+              className="flex-1 bg-black text-white rounded-lg py-2 text-sm font-semibold disabled:opacity-40"
+            >
+              {loadingWiden ? "尋找中..." : "放寬搜尋"}
+            </button>
+            <button
+              type="button"
+              onClick={onStartOver}
+              className="flex-1 border rounded-lg py-2 text-sm font-semibold bg-white text-black"
+            >
+              重新推薦
+            </button>
+          </div>
+        </div>
+      )}
+
+      {!showRescuePrompt && !round2 && !selectedPlaceId && (
         <button
           type="button"
           onClick={onRequestRound2}

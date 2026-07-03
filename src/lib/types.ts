@@ -32,6 +32,12 @@ export const DEFAULT_PROFILE: Profile = {
   excludedPlaceIds: [],
 };
 
+export interface TierQueries {
+  tier1: string;
+  tier2: string | null;
+  tier3: string;
+}
+
 export interface RecommendRequestBody {
   lat: number;
   lng: number;
@@ -42,6 +48,24 @@ export interface RecommendRequestBody {
   profile: Profile;
   round: 1 | 2;
   excludePlaceIds?: string[];
+  tierQueries?: TierQueries;
+}
+
+export interface WidenRequestBody {
+  lat: number;
+  lng: number;
+  distanceKm: number;
+  mood: Mood;
+  motivation: Motivation;
+  priceLevel: PriceLevel;
+  profile: Profile;
+  tierQueries: TierQueries;
+  excludePlaceIds: string[];
+  needed: number;
+}
+
+export interface WidenResponse {
+  restaurants: RestaurantCard[];
 }
 
 export interface RestaurantCard {
@@ -63,6 +87,8 @@ export interface RestaurantCard {
 export interface RecommendResponse {
   round: 1 | 2;
   relaxed: boolean;
+  rescued?: boolean;
+  tierQueries?: TierQueries;
   opening: string;
   restaurants: RestaurantCard[];
 }

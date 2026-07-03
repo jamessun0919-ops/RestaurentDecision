@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import HomePage from "./components/HomePage";
 import ProfileForm from "./components/ProfileForm";
 import QueryForm, { QueryInput } from "./components/QueryForm";
 import ReturningUserPrompt from "./components/ReturningUserPrompt";
@@ -13,9 +14,9 @@ import {
   updateLastHistorySatisfaction,
   updateLastHistorySelection,
 } from "@/lib/storage";
-import { HistoryEntry, Profile, RecommendResponse, RestaurantCard } from "@/lib/types";
+import { HistoryEntry, Profile, RecommendResponse, RestaurantCard, WidenResponse } from "@/lib/types";
 
-type Step = "loading" | "profile-setup" | "returning-prompt" | "query" | "results";
+type Step = "loading" | "home" | "profile-setup" | "returning-prompt" | "query" | "results";
 
 interface BootState {
   profile: Profile | null;
@@ -25,11 +26,13 @@ interface BootState {
 
 export default function Home() {
   const [boot, setBoot] = useState<BootState>({ profile: null, history: [], step: "loading" });
+  const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [queryInput, setQueryInput] = useState<QueryInput | null>(null);
   const [round1, setRound1] = useState<RecommendResponse | null>(null);
   const [round2, setRound2] = useState<RecommendResponse | null>(null);
   const [loadingResults, setLoadingResults] = useState(false);
   const [loadingRound2, setLoadingRound2] = useState(false);
+  const [loadingWiden, setLoadingWiden] = useState(false);
   const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -37,14 +40,18 @@ export default function Home() {
     const p = loadProfile();
     const h = loadHistory();
     // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time read of localStorage on mount, not derivable during render (SSR has no window)
-    setBoot({
-      profile: p,
-      history: h,
-      step: !p ? "profile-setup" : h.length > 0 ? "returning-prompt" : "query",
-    });
+    setBoot({ profile: p, history: h, step: "home" });
   }, []);
 
   const { profile, history, step } = boot;
+
+  function handleHomeStart(loc: { lat: number; lng: number }) {
+    setLocation(loc);
+    setBoot((prev) => ({
+      ...prev,
+      step: !prev.profile ? "profile-setup" : prev.history.length > 0 ? "returning-prompt" : "query",
+    }));
+  }
 
   function handleProfileSubmit(p: Profile) {
     saveProfile(p);
@@ -69,7 +76,8 @@ export default function Home() {
   async function callRecommend(
     input: QueryInput,
     round: 1 | 2,
-    excludePlaceIds: string[]
+    excludePlaceIds: string[],
+    tierQueries?: RecommendResponse["tierQueries"]
   ): Promise<RecommendResponse> {
     const res = await fetch("/api/recommend", {
       method: "POST",
@@ -84,6 +92,7 @@ export default function Home() {
         profile,
         round,
         excludePlaceIds,
+        tierQueries,
       }),
     });
     if (!res.ok) {
@@ -128,7 +137,7 @@ export default function Home() {
     setError(null);
     try {
       const excludeIds = round1.restaurants.map((r) => r.placeId);
-      const result = await callRecommend(queryInput, 2, excludeIds);
+      const result = await callRecommend(queryInput, 2, excludeIds, round1.tierQueries);
       setRound2(result);
       appendHistory({
         timestamp: new Date().toISOString(),
@@ -149,6 +158,43 @@ export default function Home() {
     }
   }
 
+  async function handleWiden() {
+    if (!round1 || !round1.tierQueries || !queryInput) return;
+    setLoadingWiden(true);
+    setError(null);
+    try {
+      const needed = 3 - round1.restaurants.length;
+      const res = await fetch("/api/recommend/widen", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          lat: queryInput.lat,
+          lng: queryInput.lng,
+          distanceKm: queryInput.distanceKm,
+          mood: queryInput.mood,
+          motivation: queryInput.motivation,
+          priceLevel: queryInput.priceLevel,
+          profile,
+          tierQueries: round1.tierQueries,
+          excludePlaceIds: round1.restaurants.map((r) => r.placeId),
+          needed,
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error ?? "推薦服務發生錯誤");
+      }
+      const data: WidenResponse = await res.json();
+      setRound1((prev) =>
+        prev ? { ...prev, rescued: false, restaurants: [...prev.restaurants, ...data.restaurants] } : prev
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "發生未知錯誤");
+    } finally {
+      setLoadingWiden(false);
+    }
+  }
+
   function handleSelect(restaurant: RestaurantCard) {
     setSelectedPlaceId(restaurant.placeId);
     updateLastHistorySelection(restaurant.placeId);
@@ -164,19 +210,36 @@ export default function Home() {
     setError(null);
   }
 
+  const showFoodBg = step === "profile-setup" || step === "query";
+
   return (
-    <div className="flex flex-col flex-1 items-center bg-zinc-50 font-sans py-8">
+    <div className="relative flex flex-col flex-1 items-center bg-zinc-50 font-sans py-8">
+      {showFoodBg && (
+        // eslint-disable-next-line @next/next/no-img-element -- static public asset, decorative background watermark
+        <img
+          src="/selectfoodbg.jpg"
+          alt=""
+          className="absolute inset-0 w-full h-full object-cover opacity-30 pointer-events-none select-none"
+        />
+      )}
+
       {error && (
-        <div className="w-full max-w-md mx-auto px-4 mb-4">
+        <div className="relative w-full max-w-md mx-auto px-4 mb-4">
           <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg p-3">
             {error}
           </p>
         </div>
       )}
 
-      {step === "loading" && <p className="text-sm text-gray-500">載入中...</p>}
+      {step === "loading" && <p className="relative text-sm text-gray-500">載入中...</p>}
 
-      {step === "profile-setup" && <ProfileForm onSubmit={handleProfileSubmit} />}
+      {step === "home" && <HomePage onStart={handleHomeStart} />}
+
+      {step === "profile-setup" && (
+        <div className="relative bg-white/80 rounded-2xl backdrop-blur-sm">
+          <ProfileForm onSubmit={handleProfileSubmit} />
+        </div>
+      )}
 
       {step === "returning-prompt" && history.length > 0 && (
         <ReturningUserPrompt
@@ -185,10 +248,12 @@ export default function Home() {
         />
       )}
 
-      {step === "query" && (
+      {step === "query" && location && (
         <>
-          <QueryForm onSubmit={handleQuerySubmit} />
-          {loadingResults && <p className="text-sm text-gray-500 mt-4">搜尋餐廳中...</p>}
+          <div className="relative bg-white/80 rounded-2xl backdrop-blur-sm">
+            <QueryForm onSubmit={handleQuerySubmit} location={location} />
+          </div>
+          {loadingResults && <p className="relative text-sm text-gray-500 mt-4">搜尋餐廳中...</p>}
         </>
       )}
 
@@ -198,17 +263,22 @@ export default function Home() {
             round1={round1}
             round2={round2}
             loadingRound2={loadingRound2}
+            loadingWiden={loadingWiden}
             selectedPlaceId={selectedPlaceId}
             onSelect={(r) => handleSelect(r)}
             onRequestRound2={handleRequestRound2}
+            onWiden={handleWiden}
+            onStartOver={startOver}
           />
-          <button
-            type="button"
-            onClick={startOver}
-            className="text-sm text-gray-500 underline mt-4"
-          >
-            重新開始一次推薦
-          </button>
+          {!(round1.rescued && !selectedPlaceId) && (
+            <button
+              type="button"
+              onClick={startOver}
+              className="text-sm text-gray-500 underline mt-4"
+            >
+              重新推薦
+            </button>
+          )}
         </>
       )}
     </div>

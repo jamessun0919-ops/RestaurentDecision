@@ -1,7 +1,7 @@
 import { DIETARY_RESTRICTION_INFO, MOOD_LABELS, MOOD_TIERS, MOTIVATION_KEYWORDS, MOTIVATION_LABELS } from "./dictionary";
 import { refineSearchQuery } from "./openai";
 import { buildNavigationUrl, haversineDistanceKm, PlaceCandidate, searchPlacesText } from "./places";
-import { Mood, Motivation, PriceLevel, Profile, RestaurantCard } from "./types";
+import { Mood, Motivation, PriceLevel, Profile, RestaurantCard, TierQueries } from "./types";
 
 function applyHardFilters(candidates: PlaceCandidate[], profile: Profile): PlaceCandidate[] {
   const requiresVegetarian = profile.dietaryRestrictions.some(
@@ -50,68 +50,177 @@ function rankCandidates(
     });
 }
 
-// 每個 Tier 只算一次搜尋字串：Tier1 交給 Gemini 依會員資料微調（唯一一次 LLM 呼叫），
-// Tier2/Tier3 是保底用的廣泛關鍵字，直接用字典字串組合，不再呼叫 LLM。
-// 這組字串跟距離/價位無關，首輪與次輪放寬會共用同一份，避免重複呼叫 Gemini。
-async function buildTierQueries(
+// Tier1 交給 OpenAI 依會員資料微調（唯一一次 LLM 呼叫），Tier2/Tier3 直接用字典字串組合，不呼叫 LLM。
+// 這組字串跟距離/價位無關，首輪／換一批／放寬搜尋可以共用同一份（由呼叫端把 cached 傳進來），避免重複呼叫 LLM。
+async function resolveTierQueries(
   mood: Mood,
   motivation: Motivation,
-  profile: Profile
-): Promise<string[]> {
-  const moodTiers = MOOD_TIERS[mood];
-  const tierKeywordLists = [moodTiers.tier1, moodTiers.tier2, moodTiers.tier3].filter(
-    (t): t is string[] => Array.isArray(t)
-  );
+  profile: Profile,
+  cached?: TierQueries
+): Promise<TierQueries> {
+  if (cached) return cached;
 
-  const queries: string[] = [];
-  for (let i = 0; i < tierKeywordLists.length; i++) {
-    const baseKeywords = [...tierKeywordLists[i], ...MOTIVATION_KEYWORDS[motivation]];
-    if (i === 0) {
-      queries.push(
-        await refineSearchQuery(baseKeywords, MOOD_LABELS[mood], MOTIVATION_LABELS[motivation], profile)
-      );
-    } else {
-      queries.push(baseKeywords.join(" "));
-    }
-  }
-  return queries;
+  const moodTiers = MOOD_TIERS[mood];
+  const motivationKeywords = MOTIVATION_KEYWORDS[motivation];
+
+  const tier1 = await refineSearchQuery(
+    [...moodTiers.tier1, ...motivationKeywords],
+    MOOD_LABELS[mood],
+    MOTIVATION_LABELS[motivation],
+    profile
+  );
+  const tier2 = moodTiers.tier2 ? [...moodTiers.tier2, ...motivationKeywords].join(" ") : null;
+  const tier3 = [...moodTiers.tier3, ...motivationKeywords].join(" ");
+
+  return { tier1, tier2, tier3 };
 }
 
-async function runTieredSearch(
-  queries: string[],
+// 查一層關鍵字、套硬性過濾／排除清單／距離上限，累加進 merged，回傳目前累積後的排序結果。
+async function searchTier(
+  query: string,
+  profile: Profile,
+  lat: number,
+  lng: number,
+  radiusKm: number,
+  priceLevel: PriceLevel,
+  excludeIds: Set<string>,
+  maxDistanceKm: number,
+  merged: Map<string, PlaceCandidate>
+): Promise<RestaurantCard[]> {
+  const results = await searchPlacesText(query, lat, lng, radiusKm * 1000);
+  const filtered = applyHardFilters(results, profile)
+    .filter((r) => !excludeIds.has(r.placeId))
+    .filter((r) => haversineDistanceKm(lat, lng, r.lat, r.lng) <= maxDistanceKm);
+
+  for (const r of filtered) {
+    if (!merged.has(r.placeId)) merged.set(r.placeId, r);
+  }
+
+  return rankCandidates(Array.from(merged.values()), priceLevel, lat, lng);
+}
+
+// 依交通工具的直覺分級：步行可接受範圍（<=2km）誤差容忍度低，倍數收緊；
+// 開車可接受範圍（>5km）誤差容忍度高，倍數放寬。硬性上限一律以使用者原始輸入距離為準，
+// 不論精準搜尋、保底救援還是次輪放寬都套用同一個上限，不會跟著放寬動作一起放大。
+function computeMaxDistanceKm(distanceKm: number): number {
+  if (distanceKm <= 2) return distanceKm * 1.2;
+  if (distanceKm <= 5) return distanceKm * 1.5;
+  return distanceKm * 2;
+}
+
+export interface Round1Result {
+  restaurants: RestaurantCard[];
+  rescued: boolean;
+  tierQueries: TierQueries;
+}
+
+// 首輪：以精準為目標，只查 Tier1（不夠3家再查 Tier2，若該心情沒有 Tier2 則略過），
+// 不做距離/價位放寬。只有在 Tier1+Tier2 完全查無結果（0筆）時才觸發保底救援：
+// 改查 Tier3，還是0筆則再放寬一次距離（價位不動），確保下限至少 1 筆、避免 0 筆的畫面。
+export async function getRound1Recommendations(params: {
+  mood: Mood;
+  motivation: Motivation;
+  profile: Profile;
+  lat: number;
+  lng: number;
+  distanceKm: number;
+  priceLevel: PriceLevel;
+}): Promise<Round1Result> {
+  const excludeIds = new Set(params.profile.excludedPlaceIds);
+  const tierQueries = await resolveTierQueries(params.mood, params.motivation, params.profile);
+  const maxDistanceKm = computeMaxDistanceKm(params.distanceKm);
+  const merged = new Map<string, PlaceCandidate>();
+
+  const search = (query: string, radiusKm: number) =>
+    searchTier(
+      query,
+      params.profile,
+      params.lat,
+      params.lng,
+      radiusKm,
+      params.priceLevel,
+      excludeIds,
+      maxDistanceKm,
+      merged
+    );
+
+  let ranked = await search(tierQueries.tier1, params.distanceKm);
+
+  if (ranked.length < 3 && tierQueries.tier2) {
+    ranked = await search(tierQueries.tier2, params.distanceKm);
+  }
+
+  let rescued = false;
+  if (ranked.length === 0) {
+    rescued = true;
+    ranked = await search(tierQueries.tier3, params.distanceKm);
+    if (ranked.length === 0) {
+      ranked = await search(tierQueries.tier3, params.distanceKm + 1);
+    }
+  }
+
+  return { restaurants: ranked.slice(0, 3), rescued, tierQueries };
+}
+
+export interface RelaxedSearchResult {
+  restaurants: RestaurantCard[];
+  relaxed: boolean;
+}
+
+// 共用的「完整降級＋放寬」引擎：Tier1→2→3 依序查到湊滿 needed 筆為止；
+// 全部查完還不夠，才放寬距離+1km、價位+1級，同一套 Tier 再查一次。
+// 「換一批」（次輪）與「放寬搜尋」（首輪保底不足時的補足）都共用這個引擎，
+// 差別只在 needed 筆數與排除清單。
+async function runFullRelaxCascade(
+  tierQueries: TierQueries,
   profile: Profile,
   lat: number,
   lng: number,
   distanceKm: number,
   priceLevel: PriceLevel,
   excludeIds: Set<string>,
-  maxDistanceKm: number
-): Promise<RestaurantCard[]> {
+  maxDistanceKm: number,
+  needed: number
+): Promise<RelaxedSearchResult> {
   const merged = new Map<string, PlaceCandidate>();
+  const queries = [tierQueries.tier1, tierQueries.tier2, tierQueries.tier3].filter(
+    (q): q is string => typeof q === "string"
+  );
 
+  let ranked: RestaurantCard[] = [];
   for (const query of queries) {
-    const results = await searchPlacesText(query, lat, lng, distanceKm * 1000);
-    const filtered = applyHardFilters(results, profile)
-      .filter((r) => !excludeIds.has(r.placeId))
-      .filter((r) => haversineDistanceKm(lat, lng, r.lat, r.lng) <= maxDistanceKm);
-
-    for (const r of filtered) {
-      if (!merged.has(r.placeId)) merged.set(r.placeId, r);
-    }
-
-    const ranked = rankCandidates(Array.from(merged.values()), priceLevel, lat, lng);
-    if (ranked.length >= 3) return ranked;
+    ranked = await searchTier(query, profile, lat, lng, distanceKm, priceLevel, excludeIds, maxDistanceKm, merged);
+    if (ranked.length >= needed) return { restaurants: ranked, relaxed: false };
   }
 
-  return rankCandidates(Array.from(merged.values()), priceLevel, lat, lng);
+  const relaxedDistanceKm = distanceKm + 1;
+  const relaxedPriceLevel = Math.min(priceLevel + 1, 4) as PriceLevel;
+  for (const query of queries) {
+    ranked = await searchTier(
+      query,
+      profile,
+      lat,
+      lng,
+      relaxedDistanceKm,
+      relaxedPriceLevel,
+      excludeIds,
+      maxDistanceKm,
+      merged
+    );
+    if (ranked.length >= needed) return { restaurants: ranked, relaxed: true };
+  }
+
+  return { restaurants: ranked, relaxed: true };
 }
 
-export interface RecommendResult {
+export interface Round2Result {
   restaurants: RestaurantCard[];
   relaxed: boolean;
+  tierQueries: TierQueries;
 }
 
-export async function getRecommendations(params: {
+// 「都不喜歡，幫我換一批」：排除首輪已顯示的餐廳，重新湊一批3家（獨立於首輪的「次輪推薦」區塊）。
+export async function getRound2Recommendations(params: {
   mood: Mood;
   motivation: Motivation;
   profile: Profile;
@@ -120,47 +229,55 @@ export async function getRecommendations(params: {
   distanceKm: number;
   priceLevel: PriceLevel;
   excludePlaceIds: string[];
-}): Promise<RecommendResult> {
+  tierQueries?: TierQueries;
+}): Promise<Round2Result> {
   const excludeIds = new Set([...params.excludePlaceIds, ...params.profile.excludedPlaceIds]);
-  const queries = await buildTierQueries(params.mood, params.motivation, params.profile);
-  const maxDistanceKm = params.distanceKm * 2;
+  const tierQueries = await resolveTierQueries(params.mood, params.motivation, params.profile, params.tierQueries);
+  const maxDistanceKm = computeMaxDistanceKm(params.distanceKm);
 
-  let ranked = await runTieredSearch(
-    queries,
+  const { restaurants, relaxed } = await runFullRelaxCascade(
+    tierQueries,
     params.profile,
     params.lat,
     params.lng,
     params.distanceKm,
     params.priceLevel,
     excludeIds,
-    maxDistanceKm
+    maxDistanceKm,
+    3
   );
 
-  let relaxed = false;
+  return { restaurants: restaurants.slice(0, 3), relaxed, tierQueries };
+}
 
-  if (ranked.length < 3) {
-    relaxed = true;
-    const relaxedDistanceKm = params.distanceKm + 1;
-    const relaxedPriceLevel = Math.min(params.priceLevel + 1, 4) as PriceLevel;
-    const relaxedRanked = await runTieredSearch(
-      queries,
-      params.profile,
-      params.lat,
-      params.lng,
-      relaxedDistanceKm,
-      relaxedPriceLevel,
-      excludeIds,
-      maxDistanceKm
-    );
-    const merged = new Map<string, RestaurantCard>();
-    for (const r of [...ranked, ...relaxedRanked]) {
-      if (!merged.has(r.placeId)) merged.set(r.placeId, r);
-    }
-    ranked = Array.from(merged.values()).sort((a, b) => {
-      if (a.priceMatched !== b.priceMatched) return a.priceMatched ? -1 : 1;
-      return a.distanceKm - b.distanceKm;
-    });
-  }
+// 「放寬搜尋」：首輪保底救援後選擇不多時，使用者主動要求補足。保留首輪已顯示的餐廳，
+// 只補足到 3 家，回傳的是「新增的」餐廳（由呼叫端併入首輪清單），不是取代。
+export async function getWidenRecommendations(params: {
+  mood: Mood;
+  motivation: Motivation;
+  profile: Profile;
+  lat: number;
+  lng: number;
+  distanceKm: number;
+  priceLevel: PriceLevel;
+  excludePlaceIds: string[];
+  tierQueries: TierQueries;
+  needed: number;
+}): Promise<{ restaurants: RestaurantCard[] }> {
+  const excludeIds = new Set([...params.excludePlaceIds, ...params.profile.excludedPlaceIds]);
+  const maxDistanceKm = computeMaxDistanceKm(params.distanceKm);
 
-  return { restaurants: ranked.slice(0, 3), relaxed };
+  const { restaurants } = await runFullRelaxCascade(
+    params.tierQueries,
+    params.profile,
+    params.lat,
+    params.lng,
+    params.distanceKm,
+    params.priceLevel,
+    excludeIds,
+    maxDistanceKm,
+    params.needed
+  );
+
+  return { restaurants: restaurants.slice(0, params.needed) };
 }
