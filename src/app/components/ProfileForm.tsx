@@ -50,7 +50,7 @@ export default function ProfileForm({ onSubmit }: { onSubmit: (profile: Profile)
             type="number"
             min={1}
             max={120}
-            className="border rounded-lg px-3 py-2"
+            className="border rounded-lg px-3 py-2 bg-white"
             value={profile.age ?? ""}
             onChange={(e) =>
               setProfile((p) => ({ ...p, age: e.target.value ? Number(e.target.value) : null }))
@@ -60,7 +60,7 @@ export default function ProfileForm({ onSubmit }: { onSubmit: (profile: Profile)
         <label className="flex-1 flex flex-col gap-1">
           <span className="text-sm text-gray-600">性別（選填）</span>
           <select
-            className="border rounded-lg px-3 py-2"
+            className="border rounded-lg px-3 py-2 bg-white"
             value={profile.gender ?? ""}
             onChange={(e) => setProfile((p) => ({ ...p, gender: e.target.value || null }))}
           >

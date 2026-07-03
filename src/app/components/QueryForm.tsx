@@ -72,6 +72,22 @@ export default function QueryForm({
             </button>
           ))}
         </div>
+        <button
+          type="button"
+          onClick={() =>
+            onSubmit({
+              mood: "bored",
+              motivation: "study",
+              priceLevel: 1,
+              distanceKm: 0,
+              lat: location.lat,
+              lng: location.lng,
+            })
+          }
+          className="rounded-lg px-3 py-2 border border-dashed border-red-400 text-sm text-red-600"
+        >
+          測試錯誤用（無聊＋讀書／辦公＋0公里＋$）
+        </button>
       </div>
 
       <div className="flex flex-col gap-2">

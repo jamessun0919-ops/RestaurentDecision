@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { ReactNode, useEffect, useState } from "react";
 import HomePage from "./components/HomePage";
 import ProfileForm from "./components/ProfileForm";
 import QueryForm, { QueryInput } from "./components/QueryForm";
@@ -17,6 +17,20 @@ import {
 import { HistoryEntry, Profile, RecommendResponse, RestaurantCard, WidenResponse } from "@/lib/types";
 
 type Step = "loading" | "home" | "profile-setup" | "returning-prompt" | "query" | "results";
+
+function BgCard({ children }: { children: ReactNode }) {
+  return (
+    <div className="relative w-full max-w-md mx-auto min-h-[660px]">
+      {/* eslint-disable-next-line @next/next/no-img-element -- static public asset, decorative background watermark */}
+      <img
+        src="/selectfoodbg.jpg"
+        alt=""
+        className="absolute inset-0 w-full h-full object-cover opacity-30 pointer-events-none select-none"
+      />
+      <div className="relative">{children}</div>
+    </div>
+  );
+}
 
 interface BootState {
   profile: Profile | null;
@@ -210,19 +224,8 @@ export default function Home() {
     setError(null);
   }
 
-  const showFoodBg = step === "profile-setup" || step === "query";
-
   return (
     <div className="relative flex flex-col flex-1 items-center bg-zinc-50 font-sans py-8">
-      {showFoodBg && (
-        // eslint-disable-next-line @next/next/no-img-element -- static public asset, decorative background watermark
-        <img
-          src="/selectfoodbg.jpg"
-          alt=""
-          className="absolute inset-0 w-full h-full object-cover opacity-30 pointer-events-none select-none"
-        />
-      )}
-
       {error && (
         <div className="relative w-full max-w-md mx-auto px-4 mb-4">
           <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg p-3">
@@ -236,23 +239,25 @@ export default function Home() {
       {step === "home" && <HomePage onStart={handleHomeStart} />}
 
       {step === "profile-setup" && (
-        <div className="relative bg-white/80 rounded-2xl backdrop-blur-sm">
+        <BgCard>
           <ProfileForm onSubmit={handleProfileSubmit} />
-        </div>
+        </BgCard>
       )}
 
       {step === "returning-prompt" && history.length > 0 && (
-        <ReturningUserPrompt
-          lastEntry={history[history.length - 1]}
-          onContinue={handleReturningContinue}
-        />
+        <BgCard>
+          <ReturningUserPrompt
+            lastEntry={history[history.length - 1]}
+            onContinue={handleReturningContinue}
+          />
+        </BgCard>
       )}
 
       {step === "query" && location && (
         <>
-          <div className="relative bg-white/80 rounded-2xl backdrop-blur-sm">
+          <BgCard>
             <QueryForm onSubmit={handleQuerySubmit} location={location} />
-          </div>
+          </BgCard>
           {loadingResults && <p className="relative text-sm text-gray-500 mt-4">搜尋餐廳中...</p>}
         </>
       )}

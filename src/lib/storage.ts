@@ -48,3 +48,8 @@ export function updateLastHistorySatisfaction(satisfaction: boolean) {
   history[history.length - 1].satisfaction = satisfaction;
   window.localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
 }
+
+export function clearAll() {
+  window.localStorage.removeItem(PROFILE_KEY);
+  window.localStorage.removeItem(HISTORY_KEY);
+}

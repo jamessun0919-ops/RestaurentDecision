@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { clearAll } from "@/lib/storage";
 
 export default function HomePage({
   onStart,
@@ -10,6 +11,12 @@ export default function HomePage({
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [locationError, setLocationError] = useState<string | null>(null);
   const [locating, setLocating] = useState(false);
+
+  function handleClearAll() {
+    if (!window.confirm("確定要清空本機儲存的推薦紀錄與會員資料嗎？")) return;
+    clearAll();
+    window.location.reload();
+  }
 
   function requestLocation() {
     setLocating(true);
@@ -32,13 +39,21 @@ export default function HomePage({
   }
 
   return (
-    <div className="fixed inset-0">
+    <div className="relative w-full max-w-md mx-auto aspect-[572/1024]">
       {/* eslint-disable-next-line @next/next/no-img-element -- static public hero background, colors kept as-is by design */}
       <img
         src="/resdecbgpic.jpg"
         alt=""
         className="absolute inset-0 w-full h-full object-cover"
       />
+
+      <button
+        type="button"
+        onClick={handleClearAll}
+        className="absolute top-4 right-4 text-xs text-white bg-black/50 rounded-lg px-2 py-1"
+      >
+        清除紀錄
+      </button>
 
       <div className="absolute bottom-6 left-4 flex flex-col gap-2 w-48">
         {location ? (

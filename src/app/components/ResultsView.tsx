@@ -22,7 +22,6 @@ function RestaurantList({
       <div className="flex flex-col items-center gap-3 text-center">
         {/* eslint-disable-next-line @next/next/no-img-element -- static public asset, next/image adds no benefit here */}
         <img src="/sorry.jpg" alt="" className="w-40 h-40 object-cover rounded-full" />
-        <p className="text-sm text-gray-500">這一輪沒有找到符合條件的餐廳。</p>
       </div>
     );
   }
@@ -67,7 +66,12 @@ function RestaurantList({
 
             <span className="text-sm text-gray-600">{r.address}</span>
 
-            {r.reason && <p className="text-sm leading-relaxed">{r.reason}</p>}
+            {r.reason && (
+              <p className="text-sm leading-relaxed">
+                <span className="font-semibold">小幫手推薦原因：</span>
+                {r.reason}
+              </p>
+            )}
 
             {selectedPlaceId === r.placeId ? (
               <a
@@ -170,11 +174,11 @@ export default function ResultsView({
 
       {showRescuePrompt && (
         <div className="flex flex-col gap-2 border border-amber-200 bg-amber-50 rounded-lg p-4">
-          <p className="text-sm text-amber-800">
-            {foundNothing
-              ? "這附近目前找不到符合設定條件的餐廳，您可以放寬搜尋距離，或修改心情／動機重新試試。"
-              : "符合您設定條件的選擇不多，是否為您放寬搜尋距離？"}
-          </p>
+          {!foundNothing && (
+            <p className="text-sm text-amber-800">
+              符合您設定條件的選擇不多，是否為您放寬搜尋距離？
+            </p>
+          )}
           <div className="flex gap-2">
             <button
               type="button"

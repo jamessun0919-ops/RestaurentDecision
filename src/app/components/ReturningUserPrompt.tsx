@@ -43,14 +43,29 @@ export default function ReturningUserPrompt({
         </div>
       )}
 
-      <label className="flex items-center gap-2">
-        <input
-          type="checkbox"
-          checked={avoidPrevious}
-          onChange={(e) => setAvoidPrevious(e.target.checked)}
-        />
-        <span className="text-sm">這次避開上次推薦過的餐廳</span>
-      </label>
+      <div className="flex flex-col gap-2">
+        <span className="text-sm text-gray-600">這次要避開上次推薦過的餐廳嗎？</span>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => setAvoidPrevious(true)}
+            className={`flex-1 rounded-lg py-2 border ${
+              avoidPrevious ? "bg-black text-white" : "bg-white text-black"
+            }`}
+          >
+            避開
+          </button>
+          <button
+            type="button"
+            onClick={() => setAvoidPrevious(false)}
+            className={`flex-1 rounded-lg py-2 border ${
+              !avoidPrevious ? "bg-black text-white" : "bg-white text-black"
+            }`}
+          >
+            不避開
+          </button>
+        </div>
+      </div>
 
       <button
         type="button"
