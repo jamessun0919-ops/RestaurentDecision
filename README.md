@@ -1,14 +1,13 @@
 # 用餐選擇小幫手
 
+
+
 [![Demo](https://img.shields.io/badge/DEMO-Live-brightgreen?style=for-the-badge)](https://restaurent-decision.vercel.app)
 
 ## 專案目標 (Project Goal)
 打造一個手機優先的網頁 App。使用者一開始連線先看到全螢幕首頁（大圖＋定位／開始推薦按鈕），按下開始後依序進入會員資料設定（僅首次）→ 心情/動機/價位/距離查詢 → 透過 Google Places API 取得餐廳資料，並由 LLM 生成具同理心的自然語言推薦（3 間餐廳），支援未選中時的次輪放寬推薦。
 
-## 已完成進度 (Completed)
-
-### AI agent/vibe coding對方案實作的改良
-AI agent可快速模擬不同地區的定位，及多種使用者變數組合的模擬顯示結果，以利於進一步調整決策結構，優化使用者體驗。
+## 計畫架構 (Architecture)
 
 ### 技術棧（已定案並實作）
 - **前端＋後端**：Next.js 16（App Router）+ TypeScript + Tailwind CSS，前後端同一個專案。
@@ -42,6 +41,11 @@ src/
       photo/route.ts           # GET，餐廳照片代理（見下方說明）
 ```
 
+## 已完成進度 (Completed)
+
+### AI agent/vibe coding對方案實作的改良
+AI agent可快速模擬不同地區的定位，及多種使用者變數組合的模擬顯示結果，以利於進一步調整決策結構，優化使用者體驗。
+
 ### 已實作並端對端測試通過的功能（已用 OpenAI `gpt-4o-mini` 版本實測，`/api/recommend` 全流程正常）
 - 首頁（`HomePage.tsx`）：使用者一連線就先看到，取得定位＋按「開始推薦」後才進入會員資料/查詢流程。
 - 會員資料設定（年齡、性別、健康方向、飲食限制、辣度接受度）。
@@ -60,6 +64,7 @@ src/
 - 已修正深色模式造成「白字白底看不到」的 CSS bug（`globals.css` 移除跟隨系統深色模式的邏輯，加上 `color-scheme: light` 讓瀏覽器原生表單元件也強制淺色呈現）。
 - 推薦結果新增硬性距離上限，避免 Google Places `locationBias` 只是軟性偏好、偶爾回傳超遠結果的問題。依交通工具誤差容忍度分三段倍數：輸入距離 ≤2km 時上限為輸入值 ×1.2、2–5km 時 ×1.5、>5km 時 ×2，且不隨放寬動作或次輪選擇而放大（距離上限代表交通工具可達範圍，是物理限制，不是預期管理問題）。
 - Places API 加上 `rankPreference: "DISTANCE"` 排序參數：實測發現 locationBias 對現行多關鍵字組合查詢字串幾乎完全失效，改善明顯（郊區2km情境從約1成候選落在合法範圍內提升到接近100%）；同時發現極短距離（<1km）是 Places API 結構性限制、排序參數救不了，因此距離滑桿下限從 0.5km 調整為 1km。已用 Playwright 跑真實端對端測試驗證。
+- **Vercel 正式環境端對端測試**（2026-07-08）：直接呼叫正式網址的 `/`、`/api/recommend`（round 1、round 2）、`/api/recommend/widen`、`/api/photo` 皆驗證通過，確認金鑰在正式環境生效、距離硬上限與保底救援行為正常；素食硬性過濾（`servesVegetarianFood`）、拒絕定位權限畫面、換一批/放寬搜尋的自動捲動體驗已於手機實機測試驗證通過。
 
 ### 使用體驗優化
 - **距離上限分級**：見上方，把原本單一 2 倍的粗略上限，依距離區間拆成三段更貼近實際交通工具誤差容忍度的倍數。
@@ -109,14 +114,7 @@ src/
   - 海鮮過敏、堅果過敏：關鍵字避開對應常見料理類別，**僅為盡力避開，非保證安全**，正式版 UI 已加免責聲明文字（勾選時彈窗，見「使用體驗優化」）。
 - `spicyLevel`（軟性）：0=不辣 / 1=小辣 / 2=中辣 / 3=大辣。
 
-## 關鍵設定與上下文 (Key Context & Rules)
-- 原始規劃文件：`RestaurentDecision.txt`（四階段實作計畫、原始 System Prompt 模板，為邏輯起點）。
-- 專案規則：`rule.txt`（已透過 `CLAUDE.md` 的 `@rule.txt` 匯入，每次對話會自動套用）。
-- **教學/實作紀錄**：`實作紀錄.md`，記錄每次改動的技術重點與原因，適合回顧學習。
-- Google Places API 限制：`price_level` 僅 0–4 五級，無實際金額；無結構化過敏原/營養素資料；無法用文字搜尋星數門檻。
-- LLM 模型：`gpt-4o-mini`（`src/lib/openai.ts` 裡的 `MODEL` 常數），選這個是因為這個任務（短篇關鍵字/JSON 生成）用最便宜的模型就夠了。
-- Gemini 相關程式碼已移除（`GEMINI_API_KEY` 還留在 `.env.local` 裡沒刪，但程式沒有再讀取它，可忽略或之後清掉）。原本 `.env.local` 裡另外還有 `ANTHROPIC_API_KEY`、`OPENCODE_GO_API_KEY`、`OPENROUTER_API_KEY` 三個程式沒用到、用途不明的變數，已確認刪除。
-- 重要教訓：**Gemini API 的計費是獨立的「Cloud Prepay」系統**，不會用到 Google Cloud 主控台顯示的一般試用額度／信用，這點跟 Places API（走一般 Cloud Billing）不一樣，如果之後又想用 Gemini，要記得這個差異。
-- 重要教訓：**API 金鑰「建立成功」不代表「能用」**，Anthropic 允許先建立金鑰、呼叫時才檢查帳戶餘額，所以認證通過（400）不等於帳戶有錢（billing 錯誤訊息），除錯時要分開檢查。
-- 使用者資料：測試版僅存瀏覽器本機 `localStorage`，無登入帳密、無資料庫、無跨裝置同步。
-- 安全提醒：`GOOGLE_PLACES_API_KEY`、`OPENAI_API_KEY` 都在 `.env.local`（已 gitignore），任何會把外部 API 網址直接暴露給前端的功能（例如照片），都要透過後端路由代理，不能讓金鑰出現在瀏覽器可見的網址或程式碼裡。
+## 未完成事項 (Incomplete)
+- 目前沒有已知的待辦技術項目；先前規劃的驗證項目（正式環境 API 端對端測試、拒絕定位權限畫面、飲食限制硬性過濾、換一批/放寬搜尋捲動體驗）已於 2026-07-08 全數驗證通過。
+- **PWA**：已取消，不在專案範圍內。
+- 若 Anthropic Console 帳戶儲值問題日後解決，可評估是否切回 Claude（非必要，目前 OpenAI `gpt-4o-mini` 版本運作正常）。
