@@ -1,7 +1,7 @@
 # 用餐選擇小幫手
 
 　　提供充分貼近日常生活需求的功能，減少每日外出用餐的選擇困難。相較於市面上的同類型app產品，本專案加入與LLM的串接，能夠處理更多使用者輸入的條件特徵，例如使用者的<mark>健康資料(年齡、性別)、健康管理需求(增肌、減脂、控醣)、飲食偏好(素食類型／辣味)</mark>等固定條件，合併<mark>當日心情與用餐動機</mark>的變動條件，再輔以<mark>預算與距離</mark>等限制條件，生成最佳的搜尋prompt，以提供最符合使用者條件的用餐選擇。
-　　
+
 　　本專案在推薦餐廳的機制方面，通過AI的協助設計了<mark>兼顧精準推薦與放寬搜尋</mark>的功能。若使用者身處於餐飲選擇密集的都會區（大學、辦公區、醫院、商場、美食街）區域，首輪能提供較多的選擇時，提供精準符合使用者條件的推薦。在相對偏遠(景點、鄉村、住宅區)的區域，設計了放寬tier與合理提升搜尋距離的次輪搜尋機制，提供全方面穩定的餐廳資訊。
 
 　　在使用者的體驗感方面，本專案採輕量版的網頁設計，無繁瑣的註冊與登錄，無擾人的商業廣告。個人化設定與歷史紀錄僅存在瀏覽器內存中(可一鍵清除)，可簡單回饋前次推薦的滿意度，並選擇是否避開前次推薦的餐廳增加新鮮感。
@@ -9,8 +9,10 @@
 
 [![Demo](https://img.shields.io/badge/DEMO-Live-brightgreen?style=for-the-badge)](https://restaurent-decision.vercel.app)
 
-## 專案目標 (Project Goal)
-打造一個根據使用者心情推薦餐廳的功能。通過使用者輸入會員資料(固定條件)、當日心情動機(變動條件)與預期距離與價格（限制條件），由LLM根據上述資料生成查詢prompt，透過 Google_Places_API取得符合使用者需求的餐廳資料，並生成｢心情小語｣與自然語言的餐廳推薦詞，供使用者選擇。
+## 專案摘要 (Project Abstract)
+隨著人工智慧與大型語言模型（LLM）技術的快速發展，個人化推薦系統的應用範圍不斷擴大，也帶動了將 LLM 應用於日常決策情境（例如「今天要吃什麼」）的研究興趣。然而，現有的餐廳推薦類 App 多半僅提供靜態條件篩選（餐飲類型、價位、距離），未能納入使用者當下的心情、用餐動機與個人健康限制等動態因素，導致使用者在餐飲選擇密集的都會區面臨選項過多、或在餐飲選擇稀疏的郊區面臨選項不足時，皆容易產生「選擇困難」。為解決此問題，本研究提出一套整合固定條件（年齡、性別、健康管理需求、飲食限制）、變動條件（當日心情與用餐動機）與限制條件（預算、距離）的方案，透過 LLM 生成搜尋 prompt，並設計「精準優先、逐層放寬」的搜尋機制。在方法設計上，系統依心情（6類）與動機（5類）建立分層關鍵字對照表，由 LLM（GPT-4o-mini）依會員資料微調搜尋關鍵字後，呼叫 Google Places API（New）並加上距離排序參數進行查詢，再依飲食限制/過敏條件做硬性過濾，並依交通工具可達範圍設定分級距離上限，搭配「首輪精準／換一批／放寬搜尋」三段式機制平衡精準度與涵蓋率。為評估本方案成效，我們分別在都會密集區（如大學城、商圈）與郊區稀疏區進行端對端測試，並在正式部署環境（Vercel）驗證各 API 端點與行動裝置使用流程。結果顯示，加入距離排序參數後，郊區2公里範圍內的合法候選比例由約一成大幅提升至近乎百分之百，同時都會區的推薦品質與涵蓋率維持穩定，證實了以 LLM 為核心、結合情境與硬性限制條件的推薦機制，能有效降低使用者的選擇疲勞。
+
+With the rapid advancement of AI-driven personalization, large language models (LLMs) have opened new possibilities for context-aware recommendation systems, motivating growing research interest in applying LLMs beyond simple keyword search to everyday decision-making tasks such as choosing where to eat. However, existing restaurant recommendation apps typically rely on static filters (cuisine type, price, distance) and fail to incorporate dynamic, personally relevant signals—such as a user's momentary mood, dining motivation, and individual health constraints—resulting in decision paralysis, especially when users face either an overwhelming number of choices in dense urban areas or too few viable options in sparse suburban regions. To address this, we propose a novel scheme that fuses static user profile data (age, gender, health goals, dietary restrictions), dynamic contextual inputs (mood and motivation), and hard constraints (budget and distance) into an LLM-generated search prompt, coupled with a precision-first, tier-based fallback search mechanism. Our system is built on a tiered mood/motivation keyword dictionary (6 mood and 5 motivation categories), where an LLM (GPT-4o-mini) refines base keywords according to user profile before querying the Google Places API (New) with distance-based ranking; results are further filtered by dietary/allergy constraints and bounded by transportation-mode-aware distance caps, with a two-round precise-then-widen mechanism to balance accuracy and coverage. To evaluate our proposed scheme, we conducted end-to-end testing across both dense urban (university/commercial areas) and sparse suburban locations, and validated the deployed production system (Vercel) across all API endpoints and mobile user flows. Results show that combining explicit distance-rank preference with tiered fallback search substantially improves the proportion of valid in-range recommendations in low-density areas (from roughly 10% to nearly 100% within a 2km radius), while maintaining stable, non-overwhelming recommendation quality in high-density regions—demonstrating the feasibility of LLM-mediated, context-aware restaurant recommendation for reducing decision fatigue.
 
 ## 計畫架構 (Architecture)
 
