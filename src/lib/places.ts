@@ -76,6 +76,7 @@ export async function searchPlacesText(
       rankPreference: "DISTANCE",
       maxResultCount: 20,
       languageCode: "zh-TW",
+      openNow: true,
     }),
   });
 
