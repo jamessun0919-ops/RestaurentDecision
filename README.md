@@ -97,6 +97,7 @@ src/
 - 推薦結果新增硬性距離上限，避免 Google Places `locationBias` 只是軟性偏好、偶爾回傳超遠結果的問題。依交通工具誤差容忍度分三段倍數：輸入距離 ≤2km 時上限為輸入值 ×1.2、2–5km 時 ×1.5、>5km 時 ×2，且不隨放寬動作或次輪選擇而放大（距離上限代表交通工具可達範圍，是物理限制，不是預期管理問題）。
 - Places API 加上 `rankPreference: "DISTANCE"` 排序參數：實測發現 locationBias 對現行多關鍵字組合查詢字串幾乎完全失效，改善明顯（郊區2km情境從約1成候選落在合法範圍內提升到接近100%）；同時發現極短距離（<1km）是 Places API 結構性限制、排序參數救不了，因此距離滑桿下限從 0.5km 調整為 1km。已用 Playwright 跑真實端對端測試驗證。
 - **Vercel 正式環境端對端測試**（2026-07-08）：直接呼叫正式網址的 `/`、`/api/recommend`（round 1、round 2）、`/api/recommend/widen`、`/api/photo` 皆驗證通過，確認金鑰在正式環境生效、距離硬上限與保底救援行為正常；素食硬性過濾（`servesVegetarianFood`）、拒絕定位權限畫面、換一批/放寬搜尋的自動捲動體驗已於手機實機測試驗證通過。
+- **營業時間硬性篩選**（2026-07-16）：晚間使用時曾推薦到已打烊的餐廳。`src/lib/places.ts` 的 `searchPlacesText()` request body 加上 `openNow: true`，由 Google 伺服器端直接排除未營業候選，round1/換一批/放寬搜尋共用同一個函式故自動套用，無需另外改推薦邏輯。已知取捨：Google 對沒登錄營業時間資料的店家也會一併排除，非單純排除「查到打烊」的，在地小吃店較容易受影響，候選池可能變小。此篩選不會被放寬搜尋鬆綁（跟距離/價位放寬不同），行為與素食/過敏硬性篩選一致。與 `food-recommendation` 專案同步做了相同邏輯。
 
 ### 會員個人資料（本機儲存，對應 `src/lib/types.ts` 的 `Profile`）
 ```json
