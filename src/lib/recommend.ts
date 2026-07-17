@@ -99,6 +99,28 @@ async function searchTier(
   return rankCandidates(Array.from(merged.values()), priceLevel, lat, lng);
 }
 
+function shuffle<T>(arr: T[]): T[] {
+  const result = [...arr];
+  for (let i = result.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [result[i], result[j]] = [result[j], result[i]];
+  }
+  return result;
+}
+
+// 依「價位是否符合」分組（維持組間優先順序），組內隨機打散，避免候選數多於顯示數時每次都固定顯示同一批。
+function shuffleWithinPriceGroups(cards: RestaurantCard[]): RestaurantCard[] {
+  const matched = cards.filter((c) => c.priceMatched);
+  const unmatched = cards.filter((c) => !c.priceMatched);
+  return [...shuffle(matched), ...shuffle(unmatched)];
+}
+
+// 候選數 > k 才隨機（避免沒有取捨空間時的無意義打散），<= k 時維持原順序。
+function pickTopK(cards: RestaurantCard[], k: number): RestaurantCard[] {
+  const pool = cards.length > k ? shuffleWithinPriceGroups(cards) : cards;
+  return pool.slice(0, k);
+}
+
 // 依交通工具的直覺分級：步行可接受範圍（<=2km）誤差容忍度低，倍數收緊；
 // 開車可接受範圍（>5km）誤差容忍度高，倍數放寬。硬性上限一律以使用者原始輸入距離為準，
 // 不論精準搜尋、保底救援還是次輪放寬都套用同一個上限，不會跟著放寬動作一起放大。
@@ -159,7 +181,7 @@ export async function getRound1Recommendations(params: {
     }
   }
 
-  return { restaurants: ranked.slice(0, 3), rescued, tierQueries };
+  return { restaurants: pickTopK(ranked, 3), rescued, tierQueries };
 }
 
 export interface RelaxedSearchResult {
@@ -247,7 +269,7 @@ export async function getRound2Recommendations(params: {
     3
   );
 
-  return { restaurants: restaurants.slice(0, 3), relaxed, tierQueries };
+  return { restaurants: pickTopK(restaurants, 3), relaxed, tierQueries };
 }
 
 // 「放寬搜尋」：首輪保底救援後選擇不多時，使用者主動要求補足。保留首輪已顯示的餐廳，
@@ -279,5 +301,5 @@ export async function getWidenRecommendations(params: {
     params.needed
   );
 
-  return { restaurants: restaurants.slice(0, params.needed) };
+  return { restaurants: pickTopK(restaurants, params.needed) };
 }

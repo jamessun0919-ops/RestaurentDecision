@@ -56,6 +56,7 @@ function RestaurantList({
             </div>
 
             <div className="flex items-center gap-2 text-xs text-gray-600">
+              <span className="bg-green-600 text-white rounded-full px-2 py-0.5">營業中</span>
               {r.category && (
                 <span className="bg-gray-100 rounded-full px-2 py-0.5">{r.category}</span>
               )}
