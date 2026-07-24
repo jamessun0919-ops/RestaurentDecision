@@ -162,7 +162,7 @@ export default function ResultsView({
     }
   }, [round2]);
 
-  const showRescuePrompt = round1.rescued && !selectedPlaceId;
+  const showRescuePrompt = round1.restaurants.length < 3 && !selectedPlaceId;
   const foundNothing = round1.restaurants.length === 0;
 
   return (

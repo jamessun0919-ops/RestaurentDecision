@@ -275,7 +275,7 @@ export default function Home() {
             onWiden={handleWiden}
             onStartOver={startOver}
           />
-          {!(round1.rescued && !selectedPlaceId) && (
+          {!(round1.restaurants.length < 3 && !selectedPlaceId) && (
             <button
               type="button"
               onClick={startOver}

@@ -99,6 +99,49 @@ async function searchTier(
   return rankCandidates(Array.from(merged.values()), priceLevel, lat, lng);
 }
 
+// 只用心情關鍵字查（不含動機），tier1→tier2→tier3 依序放寬，湊到 needed 就停。
+async function searchMoodOnly(
+  mood: Mood,
+  profile: Profile,
+  lat: number,
+  lng: number,
+  distanceKm: number,
+  priceLevel: PriceLevel,
+  excludeIds: Set<string>,
+  maxDistanceKm: number,
+  merged: Map<string, PlaceCandidate>,
+  needed: number
+): Promise<RestaurantCard[]> {
+  const moodTiers = MOOD_TIERS[mood];
+  const tier1 = await refineSearchQuery(moodTiers.tier1, MOOD_LABELS[mood], null, profile);
+  const tier2 = moodTiers.tier2 ? moodTiers.tier2.join(" ") : null;
+  const tier3 = moodTiers.tier3.join(" ");
+  const queries = [tier1, tier2, tier3].filter((q): q is string => typeof q === "string");
+
+  let ranked: RestaurantCard[] = [];
+  for (const query of queries) {
+    ranked = await searchTier(query, profile, lat, lng, distanceKm, priceLevel, excludeIds, maxDistanceKm, merged);
+    if (ranked.length >= needed) break;
+  }
+  return ranked;
+}
+
+// 只用動機關鍵字查（不含心情）。
+async function searchMotivationOnly(
+  motivation: Motivation,
+  profile: Profile,
+  lat: number,
+  lng: number,
+  distanceKm: number,
+  priceLevel: PriceLevel,
+  excludeIds: Set<string>,
+  maxDistanceKm: number,
+  merged: Map<string, PlaceCandidate>
+): Promise<RestaurantCard[]> {
+  const query = await refineSearchQuery(MOTIVATION_KEYWORDS[motivation], null, MOTIVATION_LABELS[motivation], profile);
+  return searchTier(query, profile, lat, lng, distanceKm, priceLevel, excludeIds, maxDistanceKm, merged);
+}
+
 function shuffle<T>(arr: T[]): T[] {
   const result = [...arr];
   for (let i = result.length - 1; i > 0; i--) {
@@ -202,7 +245,9 @@ async function runFullRelaxCascade(
   priceLevel: PriceLevel,
   excludeIds: Set<string>,
   maxDistanceKm: number,
-  needed: number
+  needed: number,
+  mood?: Mood,
+  motivation?: Motivation
 ): Promise<RelaxedSearchResult> {
   const merged = new Map<string, PlaceCandidate>();
   const queries = [tierQueries.tier1, tierQueries.tier2, tierQueries.tier3].filter(
@@ -230,6 +275,12 @@ async function runFullRelaxCascade(
       merged
     );
     if (ranked.length >= needed) return { restaurants: ranked, relaxed: true };
+  }
+
+  if (mood && motivation) {
+    // 心情/動機各自單獨查（原距離/價位），兩者都查完再合併，不因單一維度湊夠就跳過另一邊
+    await searchMoodOnly(mood, profile, lat, lng, distanceKm, priceLevel, excludeIds, maxDistanceKm, merged, needed);
+    ranked = await searchMotivationOnly(motivation, profile, lat, lng, distanceKm, priceLevel, excludeIds, maxDistanceKm, merged);
   }
 
   return { restaurants: ranked, relaxed: true };
@@ -298,7 +349,9 @@ export async function getWidenRecommendations(params: {
     params.priceLevel,
     excludeIds,
     maxDistanceKm,
-    params.needed
+    params.needed,
+    params.mood,
+    params.motivation
   );
 
   return { restaurants: pickTopK(restaurants, params.needed) };

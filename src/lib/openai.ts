@@ -18,8 +18,8 @@ const SPICY_LABELS = ["不辣", "小辣", "中辣", "大辣"];
 
 export async function refineSearchQuery(
   baseKeywords: string[],
-  moodLabel: string,
-  motivationLabel: string,
+  moodLabel: string | null,
+  motivationLabel: string | null,
   profile: Profile
 ): Promise<string> {
   const dietaryLabels = profile.dietaryRestrictions.map(
@@ -27,10 +27,16 @@ export async function refineSearchQuery(
   );
   const healthHint = HEALTH_GOAL_HINT[profile.healthGoal];
 
+  const dimensionLines = [
+    moodLabel !== null ? `心情：${moodLabel}` : null,
+    motivationLabel !== null ? `動機：${motivationLabel}` : null,
+  ]
+    .filter((line): line is string => line !== null)
+    .join("\n");
+
   const prompt = `你是餐廳搜尋關鍵字生成器。根據以下基礎關鍵字與使用者的個人飲食限制，產生一個給 Google Maps 搜尋用的繁體中文查詢字串（不超過 15 個字，只能輸出查詢字串本身，不要加引號、不要有其他說明文字）。
 
-心情：${moodLabel}
-動機：${motivationLabel}
+${dimensionLines}
 基礎關鍵字：${baseKeywords.join("、")}
 使用者辣度接受度：${SPICY_LABELS[profile.spicyLevel]}
 使用者健康方向：${healthHint ?? "無特別需求"}
